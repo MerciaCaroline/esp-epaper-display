@@ -38,30 +38,47 @@
 #include "esp_log.h"
 
 #include "epdif.h"
-#include "esp_log.h"
 
-static spi_device_handle_t spi;
-
-EpdIf::EpdIf() {
-};
-
-EpdIf::~EpdIf() {
-};
-
+/**
+ * @brief Escreve um valor lógico (HIGH/LOW) em um pino GPIO.
+ * 
+ * @param pin Número do pino GPIO.
+ * @param value Valor lógico a ser escrito (0 ou 1).
+ */
 void EpdIf::DigitalWrite(unsigned int pin, int value) {
     // ESP_LOGI("EPDIF", "Set Pin %i: %i", pin, value);
     gpio_set_level((gpio_num_t)pin, value);
 }
 
+/**
+ * @brief Lê o valor lógico de um pino GPIO configurado como entrada.
+ * 
+ * @param pin Número do pino GPIO.
+ * @return Valor lógico do pino (0 ou 1).
+ */
 int EpdIf::DigitalRead(unsigned int pin) {
     int level = gpio_get_level((gpio_num_t)pin);
     return level;
 }
 
+/**
+ * @brief Aguarda um tempo em milissegundos.
+ * 
+ * Pode ser implementado usando delay do sistema ou timers.
+ * 
+ * @param delaytime Tempo em milissegundos para aguardar.
+ */
 void EpdIf::DelayMs(unsigned int delaytime) {
     vTaskDelay(delaytime / portTICK_PERIOD_MS);
 }
 
+/**
+ * @brief Envia um byte via SPI.
+ * 
+ * Deve realizar a transferência SPI para comunicar com o display.
+ * 
+ * @param data Byte a ser enviado.
+ */
 void EpdIf::SpiTransfer(unsigned char data) {
     esp_err_t ret;
     spi_transaction_t t;
@@ -72,40 +89,52 @@ void EpdIf::SpiTransfer(unsigned char data) {
     t.tx_data[1] = data;
     t.tx_data[2] = data;
     t.tx_data[3] = data;
-    ret = spi_device_transmit(spi, &t);  //Transmit!
+    ret = spi_device_transmit(spi_handle, &t);  //Transmit!
     assert(ret==ESP_OK);            //Should have had no issues.
 }
 
-int EpdIf::IfInit(void) {
-    
-    if(spi) {
-		spi_bus_remove_device(spi);
-        
-	}
-	
-#if ESP_IDF_VERSION_MAJOR < 4
-    spi_bus_free(SPI_HOST); // This generates error on ESP-IDF >= v4.2
-#endif
+void EpdIf::AddDevice(int cs_pin = CS_PIN) {
 
-    gpio_config_t io_conf = {};
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pin_bit_mask = ((uint64_t)1<<(uint64_t)DC_PIN) | ((uint64_t)1<<(uint64_t)RST_PIN);
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
-    ESP_ERROR_CHECK(gpio_config(&io_conf));
-
-    gpio_config_t i_conf;
-    memset(&i_conf, 0, sizeof(i_conf));
-    i_conf.intr_type = GPIO_INTR_DISABLE;
-    i_conf.mode = GPIO_MODE_INPUT;
-    i_conf.pin_bit_mask = ((uint64_t)1<<(uint64_t)BUSY_PIN);
-    i_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    i_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    ESP_ERROR_CHECK(gpio_config(&i_conf));
+    // Adição do dispositivo SPI (EPD)
+    spi_device_interface_config_t devcfg;
+    memset(&devcfg, 0, sizeof(devcfg));
+    devcfg.command_bits = 0;
+    devcfg.address_bits = 0;
+    devcfg.dummy_bits = 0;
+    devcfg.clock_speed_hz = 2*1000*1000;
+    devcfg.mode = 0;
+    devcfg.spics_io_num = cs_pin;
+    devcfg.queue_size = 1;
 
     esp_err_t ret;
+    //Attach the EPD to the SPI bus
+    #if ESP_IDF_VERSION_MAJOR >= 4
+        ret=spi_bus_add_device(SPI2_HOST, &devcfg, &spi_handle);
+    #else
+        ret=spi_bus_add_device(SPI_HOST, &devcfg, &spi_handle);
+    #endif
 
+    assert(ret==ESP_OK);
+}
+
+/**
+ * @brief Inicializa o barramento SPI e configura o dispositivo SPI.
+ * 
+ * @return int,  0 em sucesso, código de erro caso contrário.
+ */
+int EpdIf::SpiInit() {
+    // Liberação de recursos SPI existentes
+    if(spi_handle) {
+        spi_bus_remove_device(spi_handle);
+        
+    }
+
+    #if ESP_IDF_VERSION_MAJOR < 4
+        spi_bus_free(SPI_HOST); // This generates error on ESP-IDF >= v4.2
+    #endif
+
+    esp_err_t ret;
+    // Configuração do barramento SPI
     spi_bus_config_t buscfg;
     memset(&buscfg, 0, sizeof(buscfg));
     buscfg.mosi_io_num = MOSI_PIN;
@@ -135,24 +164,46 @@ int EpdIf::IfInit(void) {
     }
     assert(ret==ESP_OK);
 
-    spi_device_interface_config_t devcfg;
-    memset(&devcfg, 0, sizeof(devcfg));
-    devcfg.command_bits = 0;
-    devcfg.address_bits = 0;
-    devcfg.dummy_bits = 0;
-    devcfg.clock_speed_hz = 2*1000*1000;
-    devcfg.mode = 0;
-    devcfg.spics_io_num = CS_PIN;
-    devcfg.queue_size = 1;
+    return 0;
+}
 
-    //Attach the EPD to the SPI bus
-    #if ESP_IDF_VERSION_MAJOR >= 4
-        ret=spi_bus_add_device(SPI2_HOST, &devcfg, &spi);
-    #else
-        ret=spi_bus_add_device(SPI_HOST, &devcfg, &spi);
-    #endif
-    
-    assert(ret==ESP_OK);
+/**
+ * @brief Inicializa a interface SPI e os pinos GPIO necessários.
+ * 
+ * @param spi_initialize Flag para inicializar ou não o SPI, pode ja ter sido inicializado
+ * @return 0 em sucesso, código de erro caso contrário.
+ */
+int EpdIf::IfInit(bool spi_initialize) {
+
+    // Configuração dos GPIOs de controle
+    // Pinos de saída (DC, RST)
+    gpio_config_t io_conf = {};
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pin_bit_mask = ((uint64_t)1<<(uint64_t)DC_PIN) | ((uint64_t)1<<(uint64_t)RST_PIN);
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
+
+    //Pino de entrada (BUSY)
+    gpio_config_t i_conf;
+    memset(&i_conf, 0, sizeof(i_conf));
+    i_conf.intr_type = GPIO_INTR_DISABLE;
+    i_conf.mode = GPIO_MODE_INPUT;
+    i_conf.pin_bit_mask = ((uint64_t)1<<(uint64_t)BUSY_PIN);
+    i_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    i_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&i_conf));
+
+    if (!spi_initialize) {
+        ESP_LOGI("EPDIF", "Skipping SPI initialization.");
+    }
+    else{
+        SpiInit(); // Initialize SPI bus
+        ESP_LOGI("EPDIF", "SPI initialized. Cs pin: %d, MOSI: %d, CLK: %d", CS_PIN, MOSI_PIN, CLK_PIN);
+    }
+
+    AddDevice(); // Add EPD device to SPI bus
 
     return 0;
 }

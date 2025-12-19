@@ -25,6 +25,8 @@
  * THE SOFTWARE.
  */
 
+#include "driver/spi_master.h"
+
 #ifndef EPDIF_H
 #define EPDIF_H
 
@@ -47,15 +49,32 @@ extern "C" {
 
 class EpdIf {
 public:
-    EpdIf(void);
-    ~EpdIf(void);
+    EpdIf(void) {};
+    virtual ~EpdIf(void){};
 
-    static int  IfInit(void);
-    static void DigitalWrite(unsigned int pin, int value); 
-    static int  DigitalRead(unsigned int pin);
-    static void DelayMs(unsigned int delaytime);
-    static void SpiTransfer(unsigned char data);
+    virtual int  IfInit(bool spi_initialize = true);
+    virtual void DigitalWrite(unsigned int pin, int value); 
+    virtual int  DigitalRead(unsigned int pin);
+    virtual void DelayMs(unsigned int delaytime);
+    virtual void SpiTransfer(unsigned char data);
+protected:
+    spi_device_handle_t spi_handle;
+    virtual int SpiInit();
+    virtual void AddDevice(int cs_pin); // Default to CS_PIN
 };
+
+// class EpdIfDefault : public EpdIf {
+// public:
+//     virtual int IfInit(bool spi_initialize);
+//     virtual void DigitalWrite(unsigned int pin, int value); 
+//     virtual int  DigitalRead(unsigned int pin);
+//     virtual void DelayMs(unsigned int delaytime);
+//     virtual void SpiTransfer(unsigned char data);
+// protected:
+//     virtual int SpiInit();
+//     virtual void AddDevice();    
+// };
+
 #ifdef __cplusplus
 }
 #endif

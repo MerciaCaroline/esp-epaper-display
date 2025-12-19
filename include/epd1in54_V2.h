@@ -44,17 +44,19 @@ extern "C" {
 
 #include "epdif.h"
 
-class Epd : EpdIf
+class Epd
 {
+protected:
+	EpdIf* epd_if;
 public:
 	unsigned long width;
 	unsigned long height;
 
-	Epd();
+	Epd(EpdIf* epd_if);
 	~Epd();
 	// int  Init(void);
-	int LDirInit(void);
-	int HDirInit(void);
+	int LDirInit(bool spi_initialize);
+	int HDirInit(bool spi_initialize);
 	void SendCommand(unsigned char command);
 	void SendData(unsigned char data);
 	void WaitUntilIdle(void);

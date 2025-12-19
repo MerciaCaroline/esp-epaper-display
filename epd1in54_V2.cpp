@@ -71,8 +71,9 @@ Epd::~Epd()
 {
 };
 
-Epd::Epd()
+Epd::Epd(EpdIf* epd_if)
 {
+	this->epd_if = epd_if;
 	reset_pin = RST_PIN;
 	dc_pin = DC_PIN;
 	cs_pin = CS_PIN;
@@ -86,8 +87,8 @@ Epd::Epd()
  */
 void Epd::SendCommand(unsigned char command)
 {
-	DigitalWrite(dc_pin, LOW);
-	SpiTransfer(command);
+	epd_if->DigitalWrite(dc_pin, LOW);
+	epd_if->SpiTransfer(command);
 }
 
 void Epd::Lut(unsigned char* lut)
@@ -102,8 +103,8 @@ void Epd::Lut(unsigned char* lut)
  */
 void Epd::SendData(unsigned char data)
 {
-	DigitalWrite(dc_pin, HIGH);
-	SpiTransfer(data);
+	epd_if->DigitalWrite(dc_pin, HIGH);
+	epd_if->SpiTransfer(data);
 }
 
 /**
@@ -111,16 +112,16 @@ void Epd::SendData(unsigned char data)
  */
 void Epd::WaitUntilIdle(void)
 {
-	while(DigitalRead(busy_pin) == 1) {      //LOW: idle, HIGH: busy
-		DelayMs(100);
+	while(epd_if->DigitalRead(busy_pin) == 1) {      //LOW: idle, HIGH: busy
+		epd_if->DelayMs(100);
 	}
-	DelayMs(200);
+	epd_if->DelayMs(200);
 }
 
-int Epd::HDirInit(void)
+int Epd::HDirInit(bool spi_initialize)
 {
 	/* this calls the peripheral hardware interface, see epdif */
-	if (IfInit() != 0) {
+	if (epd_if->IfInit(spi_initialize) != 0) {
 		return -1;
 	}
 	/* EPD hardware init start */
@@ -169,10 +170,10 @@ int Epd::HDirInit(void)
 	return 0;
 }
 
-int Epd::LDirInit(void)
+int Epd::LDirInit(bool spi_initialize)
 {
 	/* this calls the peripheral hardware interface, see epdif */
-	if (IfInit() != 0) {
+	if (epd_if->IfInit(spi_initialize) != 0) {
 		return -1;
 	}
 	/* EPD hardware init start */
@@ -248,12 +249,12 @@ void Epd::SetLut(unsigned char* lut)
  */
 void Epd::Reset(void)
 {
-	DigitalWrite(reset_pin, HIGH);
-	DelayMs(200);
-	DigitalWrite(reset_pin, LOW);                //module reset
-	DelayMs(10);
-	DigitalWrite(reset_pin, HIGH);
-	DelayMs(200);
+	epd_if->DigitalWrite(reset_pin, HIGH);
+	epd_if->DelayMs(200);
+	epd_if->DigitalWrite(reset_pin, LOW);                //module reset
+	epd_if->DelayMs(10);
+	epd_if->DigitalWrite(reset_pin, HIGH);
+	epd_if->DelayMs(200);
 }
 
 void Epd::Clear(void)
@@ -547,9 +548,9 @@ void Epd::Sleep()
 {
 	SendCommand(0x10); //enter deep sleep
 	SendData(0x01);
-	DelayMs(200);
+	epd_if->DelayMs(200);
 
-	DigitalWrite(reset_pin, LOW);
+	epd_if->DigitalWrite(reset_pin, LOW);
 }
 
 /* END OF FILE */

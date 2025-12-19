@@ -48,7 +48,7 @@ ESP-IDF Component for driving waveshare's epaper displays. This is a port of Wav
 cd <your_esp_idf_project>
 mkdir components
 cd components
-git clone https://github.com/VedantParanjape/esp-epaper-display.git epaper
+git clone https://github.com/HarpiaHarpyja/esp-epaper-display.git epaper
 ```
 
 Change CMakeList.txt to add the line given below:
